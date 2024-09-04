@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useActionData, useNavigation, useSubmit } from "@remix-run/react";
@@ -20,6 +20,11 @@ import logger from "~/logger.server";
 import { useTranslation } from "react-i18next";
 import i18n from '~/i18n.server'
 import { ShopifyAPI } from "clever_tools";
+import { addEdge, Background, BackgroundVariant, Controls, Edge, MiniMap, Node, NodeToolbar, Panel, ReactFlow, ReactFlowInstance, ReactFlowJsonObject, useEdgesState, useNodesState } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { ActionNode } from "~/components/ActionNode";
+import { EntryNode } from "~/components/EntryNode";
+import { ConditionNode } from "../components/ConditionNode";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -34,71 +39,112 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($input: ProductInput!) {
-        productCreate(input: $input) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        input: {
-          title: `${color} Snowboard`,
-        },
-      },
-    },
-  );
-  const responseJson = await response.json();
-
-  const variantId = (responseJson.data!.productCreate!.product! as ShopifyAPI.Product).variants.edges[0]!.node!.id!;
-  const variantResponse = await admin.graphql(
-    `#graphql
-      mutation shopifyRemixTemplateUpdateVariant($input: ProductVariantInput!) {
-        productVariantUpdate(input: $input) {
-          productVariant {
-            id
-            price
-            barcode
-            createdAt
-          }
-        }
-      }`,
-    {
-      variables: {
-        input: {
-          id: variantId,
-          price: Math.random() * 100,
-        },
-      },
-    },
-  );
-
-  const variantResponseJson = await variantResponse.json();
-
+ 
   return json({
-    product: responseJson!.data!.productCreate!.product,
-    variant: variantResponseJson!.data!.productVariantUpdate!.productVariant,
+   
   });
 };
+
+enum ComparisonOperator{
+  less = "<",
+  lessEqual = "<=",
+  equal = "==",
+  greaterEqual = ">=",
+  greater = ">",
+  notEqual = "!=",
+}
+
+type ComparisonFunction = (a: any, b: any) => boolean;
+
+const ComparisonFunctions: { [key in ComparisonOperator]: ComparisonFunction } = {
+  [ComparisonOperator.less]: (a, b) => a < b,
+  [ComparisonOperator.lessEqual]: (a, b) => a <= b,
+  [ComparisonOperator.equal]: (a, b) => a == b,
+  [ComparisonOperator.greaterEqual]: (a, b) => a >= b,
+  [ComparisonOperator.greater]: (a, b) => a > b,
+  [ComparisonOperator.notEqual]: (a, b) => a != b
+}
+
+// enum LogicOperator{
+//   and = "&&",
+//   or = "||",
+//   not = "!"
+// }
+
+// type LogicFunction = ((a: any, b: any) => boolean) | ((a: any) => boolean);
+
+interface FlowSyntaxTree{
+  entry: Entry
+}
+
+interface Condition{
+  type: "Condition"
+  a: any
+  b: any
+  operator: ComparisonOperator
+  then?: Action | Condition
+  else?: Action | Condition
+}
+
+interface Entry{ 
+  type: "Entry"
+  then?: Action | Condition
+}
+
+type ActionFunction = (...args: any[]) => any
+interface Action{
+  type: "Action"
+  onAction: ActionFunction
+  then?: Action | Condition
+}
+
+
+const testConditionA: Condition = { type: "Condition", a: 2, b: 4, operator: ComparisonOperator.lessEqual}
+
+function testCondition(condition: Condition){
+  return ComparisonFunctions[condition.operator](condition.a, condition.b)
+}
+
+interface EntryNode extends Node{
+  type: "EntryNode"
+  data: {
+    label: string,
+    input: any
+  }
+}
+
+interface ActionNode extends Node{
+  type: "ActionNode"
+  data: {
+    label: string,
+    actionKey: string // get function via map
+  }
+}
+
+interface ConditionNode extends Node{
+  type: "ConditionNode"
+  data: {
+    label: string,
+    a: string, // a key of global data
+    b: string, // a key of global data
+    operator: ComparisonOperator,
+  }
+}
+
+const initialNodes = [
+  { id: '1', type: "EntryNode", position: { x: 50, y: 50 }, data: { label: 'Entry', input: { a: 3, b: 5, c: "Hello" } } },
+  { id: '2', type: "ConditionNode", position: { x: 150, y: 50 }, data: { label: 'Condition' } },
+  { id: '3', type: "ActionNode", position: { x: 350, y: 50 }, data: { label: 'Action', actionKey: "actionKey" } },
+];
+const initialEdges = [
+  { id: 'e1-2', source: '1', target: '2' },
+  { id: 'e2-3', source: '2', target: '3' },
+];
+
+const functionMap: { [key: string]: ActionFunction } = {
+  "actionKey": () => { console.log("hello") }
+}
+
 
 export default function Index() {
   const { t } = useTranslation();
@@ -106,236 +152,140 @@ export default function Index() {
   const actionData = useActionData<typeof action>();
   const submit = useSubmit();
   const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(nav.state) && nav.formMethod === "POST";
-  const productId = actionData?.product?.id.replace(
-    "gid://shopify/Product/",
-    "",
-  );
+  const isLoading = ["loading", "submitting"].includes(nav.state) && nav.formMethod === "POST";
 
-  useEffect(() => {
-    if (productId) {
-      shopify.toast.show("Product created");
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null);
+
+  const nodeTypes = useMemo(() => ({ ActionNode, EntryNode, ConditionNode }), []);
+
+  console.log("testCondition", testCondition(testConditionA))
+
+  const globalData = { input: {}}
+
+  const constructFlowSyntaxBranch = (node: ActionNode | ConditionNode, flow: ReactFlowJsonObject) : (Action | Condition) => {
+    if(node.type == "ActionNode"){
+      const thenEdge = flow.edges.find(edge => edge.source == node.id)
+      const thenNode = flow.nodes.find(node => node.id == thenEdge?.target)
+      
+      if(!thenEdge || !thenNode) return {
+        type: "Action",
+        onAction: functionMap[node.data.actionKey]
+      }; 
+      return {
+        type: "Action",
+        onAction: functionMap[node.data.actionKey],
+        then: constructFlowSyntaxBranch(thenNode as ActionNode, flow)
+      }
     }
-  }, [productId, shopify]);
-  const generateProduct = () => submit({}, { replace: true, method: "POST" });
+    if(node.type == "ConditionNode"){
+      const thenEdge = flow.edges.find(edge => edge.source == node.id)
+      const thenNode = flow.nodes.find(node => node.id == thenEdge?.target)
+      
+      if(!thenEdge || !thenNode) return {
+        type: "Condition",
+        a: node.data.a,
+        b: node.data.b,
+        operator: node.data.operator
+      }; 
+      return {
+        type: "Condition",
+        a: node.data.a,
+        b: node.data.b,
+        operator: node.data.operator,
+        then: constructFlowSyntaxBranch(thenNode as ActionNode, flow)
+      }
+    }
+   
+    throw "Unsupported node type"
+    
+  }
 
+  const constructFlowSyntaxTree = (flow: ReactFlowJsonObject): FlowSyntaxTree => {
+    const entryNode = flow.nodes.find(node => node.type == "EntryNode")
+    if(!entryNode) throw "Could not find entry node."
+    
+    const thenEdge = flow.edges.find(edge => edge.source == entryNode.id)
+    const thenNode = flow.nodes.find(node => node.id == thenEdge?.target)
+    if(!thenEdge || !thenNode) return {
+       entry: {
+        type: "Entry",
+       }
+    }; 
+
+    globalData.input = { ...(entryNode?.data.input ?? {}) }
+  
+    return {
+      entry: {
+        type: "Entry",
+        then: constructFlowSyntaxBranch(thenNode as ActionNode, flow)
+      }
+    }
+  }
+  function runNode(node: Action | Condition){
+    if(node.type == "Action"){
+      node.onAction()
+      if(!node.then) return;
+      return runNode(node.then)
+    }
+    if(node.type == "Condition"){
+      
+    }
+    
+  }
+  function run(flow: FlowSyntaxTree){
+    if(!flow.entry.then) return;
+    runNode(flow.entry.then)
+  }
+
+
+  const onPrint = useCallback(() => {
+    if (!rfInstance) return;
+    // @ts-ignore
+    const flow = rfInstance.toObject();
+    
+    const fst = constructFlowSyntaxTree(flow)
+    console.log(flow, globalData, fst)
+    run(fst)
+    
+  }, [rfInstance]);
+ 
+  const onConnect = useCallback((params: any) => 
+    setEdges((eds) => addEdge(params, eds)
+  ), [setEdges],
+  );
+  
   return (
-    <Page>
-      <TitleBar title={t('hello')}>
-        <button variant="primary" onClick={generateProduct}>
-          Generate a product
-        </button>
-      </TitleBar>
+    <Page title={t('hello')}>
+     
       <BlockStack gap="500">
         <Layout>
           <Layout.Section>
-            <Card>
+            <Card padding={"200"}>
               <BlockStack gap="500">
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Congrats on creating a new Shopify app 🎉
-                  </Text>
-                  <Text variant="bodyMd" as="p">
-                    This embedded app template uses{" "}
-                    <Link
-                      url="https://shopify.dev/docs/apps/tools/app-bridge"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      App Bridge
-                    </Link>{" "}
-                    interface examples like an{" "}
-                    <Link url="/app/additional" removeUnderline>
-                      additional page in the app nav
-                    </Link>
-                    , as well as an{" "}
-                    <Link
-                      url="https://shopify.dev/docs/api/admin-graphql"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      Admin GraphQL
-                    </Link>{" "}
-                    mutation demo, to provide a starting point for app
-                    development.
-                  </Text>
-                </BlockStack>
-                <BlockStack gap="200">
-                  <Text as="h3" variant="headingMd">
-                    Get started with products
-                  </Text>
-                  <Text as="p" variant="bodyMd">
-                    Generate a product with GraphQL and get the JSON output for
-                    that product. Learn more about the{" "}
-                    <Link
-                      url="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      productCreate
-                    </Link>{" "}
-                    mutation in our API references.
-                  </Text>
-                </BlockStack>
-                <InlineStack gap="300">
-                  <Button loading={isLoading} onClick={generateProduct}>
-                    Generate a product
-                  </Button>
-                  {actionData?.product && (
-                    <Button
-                      url={`shopify:admin/products/${productId}`}
-                      target="_blank"
-                      variant="plain"
-                    >
-                      View product
-                    </Button>
-                  )}
-                </InlineStack>
-                {actionData?.product && (
-                  <>
-                    <Text as="h3" variant="headingMd">
-                      {" "}
-                      productCreate mutation
-                    </Text>
-                    <Box
-                      padding="400"
-                      background="bg-surface-active"
-                      borderWidth="025"
-                      borderRadius="200"
-                      borderColor="border"
-                      overflowX="scroll"
-                    >
-                      <pre style={{ margin: 0 }}>
-                        <code>
-                          {JSON.stringify(actionData.product, null, 2)}
-                        </code>
-                      </pre>
-                    </Box>
-                    <Text as="h3" variant="headingMd">
-                      {" "}
-                      productVariantUpdate mutation
-                    </Text>
-                    <Box
-                      padding="400"
-                      background="bg-surface-active"
-                      borderWidth="025"
-                      borderRadius="200"
-                      borderColor="border"
-                      overflowX="scroll"
-                    >
-                      <pre style={{ margin: 0 }}>
-                        <code>
-                          {JSON.stringify(actionData.variant, null, 2)}
-                        </code>
-                      </pre>
-                    </Box>
-                  </>
-                )}
+                <div style={{width: "100%", height: "400px"}}>
+                  <ReactFlow 
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onConnect={onConnect}
+                    nodeTypes={nodeTypes}
+                    // @ts-ignore
+                    onInit={setRfInstance}
+                    fitView
+                  >
+                      <Panel position="top-right">
+                        <Button onClick={onPrint}>print</Button>
+                      </Panel>
+                      <Controls />
+                      <MiniMap />
+                      <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+                  </ReactFlow>
+                </div>
               </BlockStack>
             </Card>
-          </Layout.Section>
-          <Layout.Section variant="oneThird">
-            <BlockStack gap="500">
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    App template specs
-                  </Text>
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Framework
-                      </Text>
-                      <Link
-                        url="https://remix.run"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        Remix
-                      </Link>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Database
-                      </Text>
-                      <Link
-                        url="https://www.prisma.io/"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        Prisma
-                      </Link>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Interface
-                      </Text>
-                      <span>
-                        <Link
-                          url="https://polaris.shopify.com"
-                          target="_blank"
-                          removeUnderline
-                        >
-                          Polaris
-                        </Link>
-                        {", "}
-                        <Link
-                          url="https://shopify.dev/docs/apps/tools/app-bridge"
-                          target="_blank"
-                          removeUnderline
-                        >
-                          App Bridge
-                        </Link>
-                      </span>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        API
-                      </Text>
-                      <Link
-                        url="https://shopify.dev/docs/api/admin-graphql"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        GraphQL API
-                      </Link>
-                    </InlineStack>
-                  </BlockStack>
-                </BlockStack>
-              </Card>
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Next steps
-                  </Text>
-                  <List>
-                    <List.Item>
-                      Build an{" "}
-                      <Link
-                        url="https://shopify.dev/docs/apps/getting-started/build-app-example"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        {" "}
-                        example app
-                      </Link>{" "}
-                      to get started
-                    </List.Item>
-                    <List.Item>
-                      Explore Shopify’s API with{" "}
-                      <Link
-                        url="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        GraphiQL
-                      </Link>
-                    </List.Item>
-                  </List>
-                </BlockStack>
-              </Card>
-            </BlockStack>
           </Layout.Section>
         </Layout>
       </BlockStack>

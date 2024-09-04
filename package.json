@@ -24,7 +24,7 @@
     "node": "^18.20 || ^20.10 || >=21.0.0"
   },
   "dependencies": {
-    "@prisma/client": "^5.11.0",
+    "@prisma/client": "^5.19.0",
     "@remix-run/dev": "^2.7.1",
     "@remix-run/node": "^2.7.1",
     "@remix-run/react": "^2.7.1",
@@ -37,11 +37,11 @@
     "@shopify/shopify-api": "^11.0.0",
     "@shopify/shopify-app-remix": "^3.0.0",
     "@shopify/shopify-app-session-storage-prisma": "^5.0.0",
+    "@xyflow/react": "^12.2.0",
     "clever_tools": "github:beeclever/clever_tools",
     "i18next": "^23.11.5",
     "isbot": "^5.1.0",
     "morgan": "^1.10.0",
-    "prisma": "^5.11.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-i18next": "^14.1.2",
@@ -63,6 +63,7 @@
     "npm": "^10.8.1",
     "pretoml": "file:utils/pretoml",
     "prettier": "^3.2.4",
+    "prisma": "^5.19.0",
     "typescript": "^5.2.2",
     "vite": "^5.1.3"
   },
