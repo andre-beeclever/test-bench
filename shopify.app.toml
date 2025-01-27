@@ -3,7 +3,7 @@
 client_id = "d85a4d5a2e613af39ac2496229bda680"
 name = "andre-dev-app"
 handle = "andre-dev-app"
-application_url = "https://thick-sri-laws-intervals.trycloudflare.com"
+application_url = "https://node-awards-terrible-handle.trycloudflare.com"
 embedded = true
 
 [build]
@@ -17,9 +17,9 @@ scopes = "write_products"
 
 [auth]
 redirect_urls = [
-  "https://thick-sri-laws-intervals.trycloudflare.com/auth/callback",
-  "https://thick-sri-laws-intervals.trycloudflare.com/auth/shopify/callback",
-  "https://thick-sri-laws-intervals.trycloudflare.com/api/auth/callback"
+  "https://node-awards-terrible-handle.trycloudflare.com/auth/callback",
+  "https://node-awards-terrible-handle.trycloudflare.com/auth/shopify/callback",
+  "https://node-awards-terrible-handle.trycloudflare.com/api/auth/callback"
 ]
 
 [webhooks]

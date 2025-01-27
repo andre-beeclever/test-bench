@@ -8,8 +8,7 @@
     "compile": "~/wasi-sdk-24.0-x86_64-macos/bin/clang++ --target=wasm32-wasi --sysroot ~/wasi-sdk-24.0-x86_64-macos/share/wasi-sysroot/ -Wl,--strip-all -Wl,--gc-sections -Oz -fno-exceptions -std=c++17 -flto -o dist/function.wasm src/main.cpp",
     "optimize": "~/binaryen-version_118/bin/wasm-opt --enable-bulk-memory --detect-features -O3 -o dist/optimized.wasm dist/function.wasm",
     "build": "npm run compile && npm run optimize",
-    "preview": "npm exec -- shopify app function run",
-    "test": "wasmtime ./dist/function.wasm < input.json"
+    "preview": "npm exec -- shopify app function run"
   },
   "codegen": {
     "schema": "schema.graphql",

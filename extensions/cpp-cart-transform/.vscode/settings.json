@@ -1,0 +1,5 @@
+{
+  "cmake.configureArgs": [
+      "-DCMAKE_TOOLCHAIN_FILE=~/wasi-sdk-24.0-x86_64-macos/share/cmake/wasi-sdk.cmake"
+  ]
+}

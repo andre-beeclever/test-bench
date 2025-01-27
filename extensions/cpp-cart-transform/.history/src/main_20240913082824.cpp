@@ -1,6 +1,6 @@
 #include <cstdio>
 
-// #include <tinyjson.hpp>
+#include <tinyjson.hpp>
 #include <shopify.hpp>
 
 #define INPUT_SIZE_LIMIT 64000 // 64 KB
@@ -19,12 +19,11 @@ int main()
   }
   
   std::printf("%s\n", str);
-  
-  // tiny::TinyJson json;
-	// json.ReadJson(str);
+  tiny::TinyJson json;
+	json.ReadJson(str);
 
-  // int token = json.Get<int>("token");
-  // std::printf("%d\n", token);
+  int token = json.Get<int>("token");
+  std::printf("%d\n", token);
   
 
   std::printf("{ \"operations\": [] }\n");
